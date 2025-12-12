@@ -91,6 +91,77 @@ else
     grub-mkconfig -o /boot/grub/grub.cfg
 fi
 
+info "Включаем инет"
+systemctl enable dhcpcd
+systemctl enable iwd
+
+if [[ ! -d /sys/firmware/efi ]]; then
+    die "Limine только для UEFI! У тебя BIOS — используй GRUB."
+fi
+
+info "Установка Limine — самый красивый загрузчик 2025 года"
+
+info "Доступные диски и разделы:"
+lsblk -dno NAME,SIZE,MODEL | grep -v loop
+echo
+ask "На каком диске находится EFI-раздел? (например nvme0n1 или sda): "
+read -r disk
+disk="/dev/$disk"
+
+ask "Номер EFI-раздела на этом диске? (обычно 1): "
+read -r part_num
+
+EFI_PART="${disk}${part_num}"
+
+[[ -b "$EFI_PART" ]] || die "Раздел $EFI_PART не существует!"
+
+# Монтируем EFI, если ещё не примонтирован
+[[ -d /boot/EFI ]] || mkdir -p /boot/EFI
+mount "$EFI_PART" /boot/EFI
+
+# Копируем файлы Limine
+mkdir -p /boot/EFI/limine
+cp /usr/share/limine/BOOTX64.EFI /boot/EFI/limine/
+
+# Получаем UUID LUKS-устройства (если есть) и root-маппера
+if cryptsetup status root >/dev/null 2>&1; then
+    LUKS_UUID=$(blkid -s UUID -o value /dev/mapper/root | head -1)
+    CRYPT_LINE="cryptdevice=UUID=$LUKS_UUID:root"
+else
+    CRYPT_LINE=""
+fi
+
+# Генерируем limine.cfg
+cat > /boot/limine.cfg <<EOF
+TIMEOUT=3
+
+DEFAULT ENTRY=Arch Linux
+
+:Arch Linux
+    PROTOCOL=linux
+    KERNEL_PATH=boot():/vmlinuz-linux
+    CMDLINE=root=/dev/mapper/root rw rootflags=subvol=@ $CRYPT_LINE quiet splash
+    MODULE_PATH=boot():/initramfs-linux.img
+    MODULE_PATH=boot():/initramfs-linux-fallback.img
+EOF
+
+info "limine.cfg создан:"
+cat /boot/limine.cfg
+
+# Устанавливаем загрузчик через efibootmgr
+info "Добавляем запись в UEFI"
+efibootmgr --create \
+    --disk "$disk" \
+    --part "$part_num" \
+    --label "Arch Linux (Limine)" \
+    --loader '\\EFI\\limine\\BOOTX64.EFI' \
+    --unicode
+
+# Переразмещаем файлы Limine на EFI-раздел (на случай обновления)
+limine-deploy /boot || true
+
+info "Limine успешно установлен!"
+
 info "Всё готово!"
 echo
 echo "   Хостнейм: $HOSTNAME"
