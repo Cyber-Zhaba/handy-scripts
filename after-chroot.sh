@@ -167,11 +167,17 @@ mkdir -p /boot/EFI/limine
 cp /usr/share/limine/BOOTX64.EFI /boot/EFI/limine/
 
 # Определяем cryptdevice (если LUKS)
-if cryptsetup status root >/dev/null 2>&1; then
-    LUKS_UUID=$(blkid -s UUID -o value "$(blkid -o device -t LABEL=root || blkid -o device -t UUID=$(blkid -o value /dev/mapper/root | xargs blkid -U))")
-    CRYPT_LINE="cryptdevice=UUID=$LUKS_UUID:root"
-else
-    CRYPT_LINE=""
+CRYPT_LINE=""
+if [[ -b /dev/mapper/root ]] && cryptsetup status root >/dev/null 2>&1; then
+    # Ищем устройство, на котором смонтирован /dev/mapper/root
+    LUKS_DEV=$(lsblk -no PKNAME /dev/mapper/root | head -1)
+    if [[ -n "$LUKS_DEV" ]] && [[ -b "/dev/$LUKS_DEV" ]]; then
+        LUKS_UUID=$(blkid -s UUID -o value "/dev/$LUKS_DEV")
+        if [[ -n "$LUKS_UUID" ]]; then
+            CRYPT_LINE="cryptdevice=UUID=$LUKS_UUID:root"
+            info "Обнаружен LUKS → добавлен параметр: $CRYPT_LINE"
+        fi
+    fi
 fi
 
 # Создаём limine.cfg
