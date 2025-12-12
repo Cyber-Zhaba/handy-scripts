@@ -87,6 +87,15 @@ info "Включаем инет"
 systemctl enable dhcpcd
 systemctl enable iwd
 
+info "Настраиваем mkinitcpio для LUKS + Btrfs + subvol=@"
+sed -i '/^MODULES=/c\MODULES=(btrfs)' /etc/mkinitcpio.conf
+sed -i '/^BINARIES=/c\BINARIES=(/usr/bin/btrfs)' /etc/mkinitcpio.conf
+cat > /etc/mkinitcpio.conf.d/hooks.conf <<'EOF'
+HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block encrypt filesystems fsck)
+EOF
+
+info "Пересобираем initramfs (linux и linux-lts, если есть)"
+mkinitcpio -P
 
 info "Установка Limine — лучший загрузчик 2025 года"
 # Собираем список всех дисков (без loop, ram, без партиций)
