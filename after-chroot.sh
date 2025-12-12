@@ -196,10 +196,12 @@ EOF
 
 info "Создан /boot/limine.cfg"
 
+PART_NUMBER="${EFI_PART##*[^0-9]}"
+
 # Добавляем загрузочную запись
 efibootmgr --create \
     --disk "$DISK" \
-    --part "${EFI_PART##*/}" \
+    --part "$PART_NUMBER" \
     --label "Arch Linux (Limine)" \
     --loader '\\EFI\\limine\\BOOTX64.EFI' \
     --unicode 'quiet splash'
