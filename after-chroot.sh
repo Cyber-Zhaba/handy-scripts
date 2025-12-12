@@ -87,43 +87,94 @@ info "Включаем инет"
 systemctl enable dhcpcd
 systemctl enable iwd
 
-if [[ ! -d /sys/firmware/efi ]]; then
-    die "Limine только для UEFI! У тебя BIOS — используй GRUB."
+
+info "Установка Limine — лучший загрузчик 2025 года"
+# Собираем список всех дисков (без loop, ram, без партиций)
+mapfile -t DISKS < <(lsblk -dno NAME | grep -E '^(sd|nvme|hd|vd)' | sort)
+
+if [[ ${#DISKS[@]} -eq 0 ]]; then
+    die "Не найдено ни одного диска! Что-то пошло не так."
 fi
 
-info "Установка Limine — самый красивый загрузчик 2025 года"
-
-info "Доступные диски и разделы:"
-lsblk -dno NAME,SIZE,MODEL | grep -v loop
 echo
-ask "На каком диске находится EFI-раздел? (например nvme0n1 или sda): "
-read -r disk
-disk="/dev/$disk"
+echo "Выбери диск, на котором находится EFI-раздел:"
+for i in "${!DISKS[@]}"; do
+    SIZE=$(lsblk -dno SIZE "/dev/${DISKS[$i]}" | head -1)
+    MODEL=$(lsblk -dno MODEL "/dev/${DISKS[$i]}" | head -1 | xargs)
+    printf "   %d) %s  (%s  %s)\n" $((i+1)) "${DISKS[$i]}" "$SIZE" "$MODEL"
+done
+echo "   $(( ${#DISKS[@]} + 1 ))) Ввести вручную"
 
-ask "Номер EFI-раздела на этом диске? (обычно 1): "
-read -r part_num
+while true; do
+    ask "Твой выбор [1-$((${#DISKS[@]} + 1))]: "
+    read -r choice
+    if [[ "$choice" -ge 1 && "$choice" -le ${#DISKS[@]} ]]; then
+        DISK="/dev/${DISKS[$((choice-1))]}"
+        break
+    elif [[ "$choice" -eq $(( ${#DISKS[@]} + 1 )) ]]; then
+        ask "Введи имя диска вручную (например nvme0n1 или sda): "
+        read -r manual_disk
+        DISK="/dev/$manual_disk"
+        [[ -b "$DISK" ]] && break || echo "Такого диска нет, попробуй ещё"
+    else
+        echo "Введи корректный номер"
+    fi
+done
 
-EFI_PART="${disk}${part_num}"
+# Теперь партиции на выбранном диске (только существующие блок-устройства)
+mapfile -t PARTS < <(lsblk -lno NAME,TYPE "$DISK" | grep part | awk '{print $1}' | sort)
 
-[[ -b "$EFI_PART" ]] || die "Раздел $EFI_PART не существует!"
+if [[ ${#PARTS[@]} -eq 0 ]]; then
+    die "На диске $DISK нет разделов!"
+fi
+
+echo
+echo "Выбери EFI-раздел (обычно FAT32, ~100–512M):"
+for i in "${!PARTS[@]}"; do
+    FULL_PART="/dev/${PARTS[$i]}"
+    SIZE=$(lsblk -no SIZE "$FULL_PART" | head -1)
+    FSTYPE=$(lsblk -no FSTYPE "$FULL_PART" | head -1)
+    printf "   %d) %s  (%s  %s)\n" $((i+1)) "${PARTS[$i]}" "$SIZE" "$FSTYPE"
+done
+echo "   $(( ${#PARTS[@]} + 1 ))) Ввести вручную"
+
+while true; do
+    ask "Твой выбор [1-$((${#PARTS[@]} + 1))]: "
+    read -r choice
+    if [[ "$choice" -ge 1 && "$choice" -le ${#PARTS[@]} ]]; then
+        EFI_PART="/dev/${PARTS[$((choice-1))]}"
+        break
+    elif [[ "$choice" -eq $(( ${#PARTS[@]} + 1 )) ]]; then
+        ask "Введи полный путь к EFI-разделу (например /dev/nvme0n1p1): "
+        read -r manual_part
+        [[ -b "$manual_part" ]] && EFI_PART="$manual_part" && break || echo "Такого раздела нет"
+    else
+        echo "Введи корректный номер"
+    fi
+done
+
+info "Выбран EFI-раздел: $EFI_PART"
 
 # Монтируем EFI, если ещё не примонтирован
-[[ -d /boot/EFI ]] || mkdir -p /boot/EFI
-mount "$EFI_PART" /boot/EFI
+mkdir -p /boot/EFI
+if ! mountpoint -q /boot/EFI; then
+    mount "$EFI_PART" /boot/EFI
+    info "EFI-раздел примонтирован в /boot/EFI"
+fi
 
-# Копируем файлы Limine
+# Копируем BOOTX64.EFI
 mkdir -p /boot/EFI/limine
 cp /usr/share/limine/BOOTX64.EFI /boot/EFI/limine/
 
-# Получаем UUID LUKS-устройства (если есть) и root-маппера
+# Определяем cryptdevice (если LUKS)
 if cryptsetup status root >/dev/null 2>&1; then
-    LUKS_UUID=$(blkid -s UUID -o value /dev/mapper/root | head -1)
+    LUKS_UUID=$(blkid -s UUID -o value "$(blkid -o device -t LABEL=root || blkid -o device -t UUID=$(blkid -o value /dev/mapper/root | xargs blkid -U))")
     CRYPT_LINE="cryptdevice=UUID=$LUKS_UUID:root"
 else
     CRYPT_LINE=""
 fi
 
-# Генерируем limine.cfg
+# Создаём limine.cfg
 cat > /boot/limine.cfg <<EOF
 TIMEOUT=3
 
@@ -137,22 +188,20 @@ DEFAULT ENTRY=Arch Linux
     MODULE_PATH=boot():/initramfs-linux-fallback.img
 EOF
 
-info "limine.cfg создан:"
-cat /boot/limine.cfg
+info "Создан /boot/limine.cfg"
 
-# Устанавливаем загрузчик через efibootmgr
-info "Добавляем запись в UEFI"
+# Добавляем загрузочную запись
 efibootmgr --create \
-    --disk "$disk" \
-    --part "$part_num" \
+    --disk "$DISK" \
+    --part "${EFI_PART##*/}" \
     --label "Arch Linux (Limine)" \
     --loader '\\EFI\\limine\\BOOTX64.EFI' \
-    --unicode
+    --unicode 'quiet splash'
 
-# Переразмещаем файлы Limine на EFI-раздел (на случай обновления)
+# Финальная деплоя
 limine-deploy /boot || true
 
-info "Limine успешно установлен!"
+info "Limine успешно установлен и добавлен в UEFI!"
 
 info "Всё готово!"
 echo
