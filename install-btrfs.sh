@@ -62,9 +62,9 @@ done
 [[ -b "$DEVICE" ]] || die "Device $DEVICE does not exist or is not a block device"
 
 if [[ $FORCE -eq 0 ]]; then
-    echo "======================================================="
+    echo "================================================================"
     echo "WARNING! This will COMPLETELY ERASE all data on $DEVICE"
-    echo "======================================================="
+    echo "================================================================"
     read -rp "Type 'YES' to continue: " confirm
     [[ "$confirm" == "YES" ]] || die "Aborted by user"
 fi
