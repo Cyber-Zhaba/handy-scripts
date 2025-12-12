@@ -44,7 +44,7 @@ for i in {0..2}; do
     NICKNAME="${NAME[$i]}-${SURNAME[$i]}"
     echo "   $((i+1))) $NICKNAME"
 done
-echo "   7) Ввести своё"
+echo "   4) Ввести своё"
 
 while true; do
     ask "Твой выбор [1-4]: "
@@ -67,12 +67,17 @@ EOF
 info "Хостнейм установлен: $HOSTNAME"
 
 # 4. Создаём пользователя
-ask "Логин нового пользователя (по умолчанию arseny): "
+ask "Логин нового пользователя (по умолчанию yovko): "
 read -r username
-username=${username:-arseny}
+username=${username:-yovko}
 
-useradd -m -G wheel,audio,video,storage,optical "$username"
-passwd "$username"
+if id "$username" >/dev/null 2>&1; then
+    info "Пользователь '$username' уже существует — пропускаем создание."
+else
+    info "Создаём пользователя '$username'"
+    useradd -m -G wheel,audio,video,storage,optical "$username"
+    passwd
+fi
 
 # 5. sudo без пароля для wheel (можно потом поменять)
 info "Настраиваем sudo для %wheel"
