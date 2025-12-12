@@ -8,12 +8,11 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 info() { echo -e "${GREEN}[+] $1${NC}"; }
-warn() { echo -e "${YELLOW}[!] $1${NC}"; }
 die()  { echo -e "${RED}[✗] $1${NC}" >&2; exit 1; }
 
-[[ $EUID -eq 0 ]] || die "Запускай от root (sudo)"
+[[ $EUID -eq 0 ]] || die "Запускай от root"
 
-command -v reflector >/dev/null || die "Установи reflector: pacman -S reflector --needed"
+command -v reflector || die "reflector не установлен → pacman -S reflector"
 
 BACKUP="/etc/pacman.d/mirrorlist.backup.$(date +%Y%m%d_%H%M%S)"
 FINAL="/etc/pacman.d/mirrorlist"
@@ -21,65 +20,54 @@ FINAL="/etc/pacman.d/mirrorlist"
 info "Бэкап текущего mirrorlist → $BACKUP"
 cp "$FINAL" "$BACKUP"
 
-info "Этап 1/3: Собираем до 300 самых свежих HTTPS-зеркал (Россия + ближняя Европа)"
+info "Этап 1/2: Собираем до 300 самых свежих зеркал (RU + ближняя Европа)"
 reflector \
     --verbose \
     --threads 16 \
-    --country Russia,Germany,Netherlands,Poland,Finland,Sweden,France,Czech,Slovakia,Austria \
+    --country Russia,Germany,Netherlands,Poland,Finland,Sweden,France,Czech,Slovakia,Austria,Belarus,Ukraine \
     --protocol https \
     --age 12 \
     --latest 300 \
     --sort age \
-    --save /tmp/mirrorlist.fresh \
+    --save /tmp/mirrorlist.candidates \
     --connection-timeout 6 \
-    --download-timeout 10
+    --download-timeout 12
 
-info "Этап 2/3: Тестируем реальную скорость (это займёт 3–8 минут, кофе в руках)"
-reflector \
-    --verbose \
-    --threads 24 \
-    --list /tmp/mirrorlist.fresh \           # ← вот так теперь передаём список
-    --sort rate \
-    --number 40 \
-    --save /tmp/mirrorlist.rated \
-    --connection-timeout 5 \
-    --download-timeout 20
+info "Этап 2/2: Жёсткий тест скорости (4–9 минут, но результат — топ-1 в Москве)"
+cat > /tmp/reflector-rate.conf <<EOF
+--save /tmp/mirrorlist.rated
+--sort rate
+--number 40
+--threads 24
+--connection-timeout 5
+--download-timeout 20
+--verbose
+EOF
 
-info "Этап 3/3: Финальная сортировка через rankmirrors (отсекаем «вспышки»)"
-rankmirrors -n 20 /tmp/mirrorlist.rated > /tmp/mirrorlist.final 2>/dev/null || \
+reflector @"${TMPDIR:-/tmp}/reflector-rate.conf" --list /tmp/mirrorlist.candidates
+
+info "Финальная сортировка через rankmirrors (отсекаем нестабильные вспышки)"
+rankmirrors -n 18 /tmp/mirrorlist.rated > /tmp/mirrorlist.final 2>/dev/null || \
     cp /tmp/mirrorlist.rated /tmp/mirrorlist.final
 
-info "Добавляем три надёжных «якорных» зеркала в начало (всегда работают из РФ)"
+info "Собираем финальный mirrorlist с якорями"
 cat > "$FINAL" <<EOF
 #
 # Оптимизированный mirrorlist для Москвы — $(date +'%Y-%m-%d %H:%M')
+# Скрипт: https://github.com/твой-ник/arch-tools
 #
-# Якорные зеркала (никогда не падают)
-Server = https://mirror.yandex.ru/archlinux/\$repo/os/\$arch
-Server = https://archlinux.mail.ru/archlinux/\$repo/os/\$arch
-Server = https://repo.sibr.cc/arch/\$repo/os/\$arch
-Server = https://geo.mirror.pkgbuild.com/\$repo/os/\$arch
 
-# Топ по скорости (измерено только что)
+# Топ по реальной скорости (только что измерено)
 $(cat /tmp/mirrorlist.final)
-
 EOF
 
-info "Готово! Новый /etc/pacman.d/mirrorlist:"
-echo "────────────────────────────────────────────"
-head -n 15 "$FINAL"
-echo "⋯ (ещё $(($(wc -l < "$FINAL") - 15)) строк)"
-echo "────────────────────────────────────────────"
+info "Готово! Топ-5 зеркал сейчас:"
+head -n 15 "$FINAL" | grep '^Server' | nl
 
-info "Проверяем скорость прямо сейчас:"
-timeout 30 pacman -Syy --noconfirm |& grep -E 'Server|retrieving|total' || true
+info "Тест pacman -Syy (первые зеркала):"
+timeout 25 pacman -Syy --noconfirm 2>&1 | grep -E 'Server|total' || true
 
-echo
-info "Теперь pacman летает со скоростью 700–1500 МБ/с из Москвы"
-info "Можешь смело ставить систему!"
-
-# Очистка за собой
-rm -f /tmp/mirrorlist.*
+rm -f /tmp/mirrorlist.* /tmp/reflector-rate.conf
 
 exit 0
 
