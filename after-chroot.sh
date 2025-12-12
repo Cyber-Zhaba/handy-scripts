@@ -31,30 +31,28 @@ EOF
 info "Генерируем крутые имена хостов (RFC 1178 compatible)"
 
 # Списки слов — лежат у меня на гитхабе, можно форкнуть и поменять под себя
-NAME_URL="https://github.com/Cyber-Zhaba/handy-scripts/raw/refs/heads/master/names.txt"
-SURNAME_URL="https://github.com/Cyber-Zhaba/handy-scripts/raw/refs/heads/master/surnames.txt"
+NAME_URL="https://raw.githubusercontent.com/Cyber-Zhaba/handy-scripts/refs/heads/master/names.txt"
+SURNAME_URL="https://raw.githubusercontent.com/Cyber-Zhaba/handy-scripts/refs/heads/master/surnames.txt"
 
 # Скачиваем и выбираем по 6 случайных
 mapfile -t NAME  < <(curl -s "$NAME_URL" | shuf -n 20)
 mapfile -t SURNAME < <(curl -s "$SURNAME_URL" | shuf -n 20)
 
-echo "$NAME $SURNAME"
-
 echo
 echo "Выбери имя машины (или введи своё):"
-for i in {0..5}; do
+for i in {0..2}; do
     NICKNAME="${NAME[$i]}-${SURNAME[$i]}"
     echo "   $((i+1))) $NICKNAME"
 done
 echo "   7) Ввести своё"
 
 while true; do
-    ask "Твой выбор [1-7]: "
+    ask "Твой выбор [1-4]: "
     read -r choice
     case "$choice" in
-        [1-6]) HOSTNAME="${NAME[$((choice-1))]}-${SURNAME[$((choice-1))]}"; break ;;
-        7) ask "Введи имя хоста вручную: "; read -r HOSTNAME; break ;;
-        *) echo "Введи число от 1 до 7" ;;
+        [1-3]) HOSTNAME="${NAME[$((choice-1))]}-${SURNAME[$((choice-1))]}"; break ;;
+        4) ask "Введи имя хоста вручную: "; read -r HOSTNAME; break ;;
+        *) echo "Введи число от 1 до 4" ;;
     esac
 done
 
@@ -69,9 +67,9 @@ EOF
 info "Хостнейм установлен: $HOSTNAME"
 
 # 4. Создаём пользователя
-ask "Логин нового пользователя (по умолчанию yovko): "
+ask "Логин нового пользователя (по умолчанию arseny): "
 read -r username
-username=${username:-yovko}
+username=${username:-arseny}
 
 useradd -m -G wheel,audio,video,storage,optical "$username"
 passwd "$username"
