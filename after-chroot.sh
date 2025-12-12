@@ -67,9 +67,9 @@ EOF
 info "Хостнейм установлен: $HOSTNAME"
 
 # 4. Создаём пользователя
-ask "Логин нового пользователя (по умолчанию yovko): "
+ask "Логин нового пользователя (по умолчанию arseny): "
 read -r username
-username=${username:-yovko}
+username=${username:-arseny}
 
 if id "$username" >/dev/null 2>&1; then
     info "Пользователь '$username' уже существует — пропускаем создание."
@@ -82,19 +82,6 @@ fi
 # 5. sudo без пароля для wheel (можно потом поменять)
 info "Настраиваем sudo для %wheel"
 sed -i '/^# %wheel ALL=(ALL:ALL) NOPASSWD: ALL/s/^# //' /etc/sudoers
-
-# 6. Устанавливаем grub по умолчанию (если EFI)
-if [[ -d /sys/firmware/efi ]]; then
-    info "Обнаружен EFI — ставим grub + os-prober"
-    pacman -S --noconfirm grub efibootmgr os-prober
-    grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
-    grub-mkconfig -o /boot/grub/grub.cfg
-else
-    info "Обнаружен BIOS — ставим обычный grub"
-    pacman -S --noconfirm grub os-prober
-    grub-install --target=i386-pc /dev/$(lsblk -no PKNAME $(df /mnt | tail -1 | awk '{print $1}'))
-    grub-mkconfig -o /boot/grub/grub.cfg
-fi
 
 info "Включаем инет"
 systemctl enable dhcpcd
