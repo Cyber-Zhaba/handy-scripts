@@ -38,6 +38,8 @@ SURNAME_URL="https://github.com/Cyber-Zhaba/handy-scripts/raw/refs/heads/master/
 mapfile -t NAME  < <(curl -s "$NAME_URL" | shuf -n 20)
 mapfile -t SURNAME < <(curl -s "$SURNAME_URL" | shuf -n 20)
 
+echo "$NAME $SURNAME"
+
 echo
 echo "Выбери имя машины (или введи своё):"
 for i in {0..5}; do
