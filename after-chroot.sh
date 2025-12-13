@@ -81,7 +81,7 @@ fi
 
 # 5. sudo без пароля для wheel (можно потом поменять)
 info "Настраиваем sudo для %wheel"
-sed -i '/^# %wheel ALL=(ALL:ALL) NOPASSWD: ALL/s/^# //' /etc/sudoers
+sed -i '/^# %wheel ALL=(ALL:ALL) ALL/s/^# //' /etc/sudoers
 
 info "Включаем инет"
 systemctl enable dhcpcd
