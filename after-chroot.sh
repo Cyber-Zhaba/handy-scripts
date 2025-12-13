@@ -86,6 +86,8 @@ sed -i '/^# %wheel ALL=(ALL:ALL) ALL/s/^# //' /etc/sudoers
 info "Включаем инет"
 systemctl enable dhcpcd
 systemctl enable iwd
+systemctl enable systemd-networkd
+systemctl enable systemd-resolved
 
 info "Настраиваем mkinitcpio для LUKS + Btrfs + subvol=@"
 sed -i '/^MODULES=/c\MODULES=(btrfs)' /etc/mkinitcpio.conf
@@ -163,13 +165,6 @@ while true; do
 done
 
 info "Выбран EFI-раздел: $EFI_PART"
-
-# Монтируем EFI, если ещё не примонтирован
-mkdir -p /boot/EFI
-if ! mountpoint -q /boot/EFI; then
-    mount "$EFI_PART" /boot/EFI
-    info "EFI-раздел примонтирован в /boot/EFI"
-fi
 
 # Копируем BOOTX64.EFI
 mkdir -p /boot/EFI/limine
@@ -275,8 +270,8 @@ efibootmgr --create \
     --disk "$DISK" \
     --part "$PART_NUMBER" \
     --label "Arch Linux (Limine)" \
-    --loader '\\EFI\\limine\\BOOTX64.EFI' \
-    --unicode 'quiet splash'
+    --loader '\EFI\limine\BOOTX64.EFI' \
+    --unicode
 
 info "Limine успешно установлен и добавлен в UEFI!"
 
