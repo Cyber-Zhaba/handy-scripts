@@ -76,8 +76,10 @@ if id "$username" >/dev/null 2>&1; then
 else
     info "Создаём пользователя '$username'"
     useradd -m -G wheel,audio,video,storage,optical "$username"
-    passwd
+    passwd "$username"
 fi
+
+chsh "$username" -s /usr/bin/fish
 
 # 5. sudo без пароля для wheel (можно потом поменять)
 info "Настраиваем sudo для %wheel"
