@@ -203,7 +203,7 @@ DEFAULT ENTRY=Arch Linux
     MODULE_PATH=boot():/initramfs-linux-fallback.img
 EOF
 
-info "Создан /boot/limine.cfg"
+info "Создан /boot/limine/limine.cfg"
 
 PART_NUMBER="${EFI_PART##*[^0-9]}"
 
