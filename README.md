@@ -9,3 +9,7 @@ curl -fsSL https://raw.githubusercontent.com/Cyber-Zhaba/handy-scripts/refs/head
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Cyber-Zhaba/handy-scripts/refs/heads/master/essential-packages.sh | bash
 ```
+
+```bash
+https://raw.githubusercontent.com/Cyber-Zhaba/handy-scripts/refs/heads/master/after-chroot.sh > ./after-chroot.sh && chmod +x after-chroot.sh && ./after-chroot.sh
+`
