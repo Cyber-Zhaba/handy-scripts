@@ -8,3 +8,5 @@ pacstrap -K /mnt base base-devel linux linux-firmware fish git vim cryptsetup dh
   limine \
   intel-ucode
 
+genfstab -U /mnt >> /mnt/etc/fstab
+
