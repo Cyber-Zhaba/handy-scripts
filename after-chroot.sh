@@ -278,9 +278,6 @@ efibootmgr --create \
     --loader '\\EFI\\limine\\BOOTX64.EFI' \
     --unicode 'quiet splash'
 
-# Финальная деплоя
-limine-deploy /boot || true
-
 info "Limine успешно установлен и добавлен в UEFI!"
 
 info "Всё готово!"
