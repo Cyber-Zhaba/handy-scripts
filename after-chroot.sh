@@ -175,32 +175,95 @@ fi
 mkdir -p /boot/EFI/limine
 cp /usr/share/limine/BOOTX64.EFI /boot/EFI/limine/
 
-# Определяем cryptdevice (если LUKS)
-CRYPT_LINE=""
-if [[ -b /dev/mapper/root ]] && cryptsetup status root >/dev/null 2>&1; then
-    # Ищем устройство, на котором смонтирован /dev/mapper/root
-    LUKS_DEV=$(lsblk -no PKNAME /dev/mapper/root | head -1)
-    if [[ -n "$LUKS_DEV" ]] && [[ -b "/dev/$LUKS_DEV" ]]; then
-        LUKS_UUID=$(blkid -s UUID -o value "/dev/$LUKS_DEV")
-        if [[ -n "$LUKS_UUID" ]]; then
-            CRYPT_LINE="cryptdevice=UUID=$LUKS_UUID:root"
-            info "Обнаружен LUKS → добавлен параметр: $CRYPT_LINE"
-        fi
+echo
+info "Теперь нужно указать зашифрованный раздел (LUKS), содержащий root"
+
+# Собираем список дисков (точно как для EFI)
+mapfile -t DISKS < <(lsblk -dno NAME | grep -E '^(sd|nvme|hd|vd)' | sort)
+
+echo "Выбери диск с LUKS-разделом:"
+for i in "${!DISKS[@]}"; do
+    SIZE=$(lsblk -dno SIZE "/dev/${DISKS[$i]}" | head -1)
+    MODEL=$(lsblk -dno MODEL "/dev/${DISKS[$i]}" | head -1 | xargs)
+    printf "   %d) %s  (%s  %s)\n" $((i+1)) "${DISKS[$i]}" "$SIZE" "$MODEL"
+done
+echo "   $(( ${#DISKS[@]} + 1 ))) Ввести вручную"
+echo "   $(( ${#DISKS[@]} + 2 ))) Нет шифрования (пропустить)"
+
+while true; do
+    ask "Твой выбор [1-$((${#DISKS[@]} + 2))]: "
+    read -r choice
+    if [[ "$choice" -ge 1 && "$choice" -le ${#DISKS[@]} ]]; then
+        LUKS_DISK="/dev/${DISKS[$((choice-1))]}"
+        break
+    elif [[ "$choice" -eq $(( ${#DISKS[@]} + 1 )) ]]; then
+        ask "Введи имя диска вручную (например nvme0n1): "
+        read -r manual
+        LUKS_DISK="/dev/$manual"
+        [[ -b "$LUKS_DISK" ]] && break || echo "Диск не найден"
+    elif [[ "$choice" -eq $(( ${#DISKS[@]} + 2 )) ]]; then
+        LUKS_DISK=""
+        info "Шифрование не используется"
+        break
+    else
+        echo "Некорректный выбор"
     fi
+done
+
+LUKS_PART=""
+CRYPT_LINE=""
+if [[ -n "$LUKS_DISK" ]]; then
+    mapfile -t PARTS < <(lsblk -lno NAME,TYPE "$LUKS_DISK" | grep part | awk '{print $1}' | sort)
+
+    echo
+    echo "Выбери зашифрованный раздел (обычно crypto_LUKS):"
+    for i in "${!PARTS[@]}"; do
+        FULL="/dev/${PARTS[$i]}"
+        SIZE=$(lsblk -no SIZE "$FULL")
+        FSTYPE=$(lsblk -no FSTYPE "$FULL")
+        printf "   %d) %s  (%s  %s)\n" $((i+1)) "${PARTS[$i]}" "$SIZE" "$FSTYPE"
+    done
+    echo "   $(( ${#PARTS[@]} + 1 ))) Ввести вручную"
+
+    while true; do
+        ask "Твой выбор [1-$((${#PARTS[@]} + 1))]: "
+        read -r choice
+        if [[ "$choice" -ge 1 && "$choice" -le ${#PARTS[@]} ]]; then
+            LUKS_PART="/dev/${PARTS[$((choice-1))]}"
+            break
+        elif [[ "$choice" -eq $(( ${#PARTS[@]} + 1 )) ]]; then
+            ask "Введи полный путь (например /dev/nvme0n1p3): "
+            read -r manual_part
+            [[ -b "$manual_part" ]] && LUKS_PART="$manual_part" && break || echo "Раздел не найден"
+        fi
+    done
+
+    info "Выбран LUKS-раздел: $LUKS_PART"
+
+    # Получаем UUID
+    LUKS_UUID=$(blkid -s UUID -o value "$LUKS_PART")
+    if [[ -z "$LUKS_UUID" ]]; then
+        die "Не удалось получить UUID для $LUKS_PART"
+    fi
+
+    CRYPT_LINE="cryptdevice=UUID=$LUKS_UUID:root"
+    info "UUID = $LUKS_UUID → добавлен в cmdline"
+else
+    info "Шифрование отключено — cryptdevice не добавляется"
 fi
 
-# Создаём limine.cfg
+# ----------------------------------------------------------------------
+# Создаём limine.cfg в нужном формате
+# ----------------------------------------------------------------------
 cat > /boot/limine/limine.cfg <<EOF
-TIMEOUT=3
+timeout: 3
 
-DEFAULT ENTRY=Arch Linux
+/Arch Linux
+    protocol: linux
+    path: boot():/vmlinuz-linux
+    cmdline: $CRYPT_LINE root=/dev/mapper/root rw rootflags=subvol=@ rootfstype=btrfs
+    module_path: boot():/initramfs-linux.img
 
-:Arch Linux
-    PROTOCOL=linux
-    KERNEL_PATH=boot():/vmlinuz-linux
-    CMDLINE=root=/dev/mapper/root rw rootflags=subvol=@ $CRYPT_LINE quiet splash
-    MODULE_PATH=boot():/initramfs-linux.img
-    MODULE_PATH=boot():/initramfs-linux-fallback.img
 EOF
 
 info "Создан /boot/limine/limine.cfg"
