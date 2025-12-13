@@ -190,7 +190,7 @@ if [[ -b /dev/mapper/root ]] && cryptsetup status root >/dev/null 2>&1; then
 fi
 
 # Создаём limine.cfg
-cat > /boot/limine.cfg <<EOF
+cat > /boot/limine/limine.cfg <<EOF
 TIMEOUT=3
 
 DEFAULT ENTRY=Arch Linux
