@@ -110,6 +110,8 @@ if [[ -n "$BOOT_PART" ]]; then
     mount "$BOOT_PART" "$MOUNTPOINT/boot"
 fi
 
+genfstab -U /mnt >> /mnt/etc/fstab
+
 info "Btrfs installation completed successfully!"
 echo
 echo "Root filesystem is mounted at: $MOUNTPOINT"
