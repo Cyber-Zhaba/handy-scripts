@@ -12,4 +12,5 @@ curl -fsSL https://raw.githubusercontent.com/Cyber-Zhaba/handy-scripts/refs/head
 
 ```bash
 https://raw.githubusercontent.com/Cyber-Zhaba/handy-scripts/refs/heads/master/after-chroot.sh > ./after-chroot.sh && chmod +x after-chroot.sh && ./after-chroot.sh
-`
+```
+
