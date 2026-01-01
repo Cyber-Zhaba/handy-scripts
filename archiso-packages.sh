@@ -143,4 +143,5 @@ pacstrap -K /mnt base base-devel linux linux-firmware fish git \
   btop \
   bat \
   fzf \
-  plocate
+  plocate \
+  limine
