@@ -145,3 +145,5 @@ pacstrap -K /mnt base base-devel linux linux-firmware fish git \
   fzf \
   plocate \
   limine
+
+genfstab -U /mnt >>/mnt/etc/fstab
