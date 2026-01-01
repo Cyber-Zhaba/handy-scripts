@@ -18,3 +18,11 @@ curl -fsSL https://raw.githubusercontent.com/Cyber-Zhaba/handy-scripts/refs/head
 curl -fsSL https://raw.githubusercontent.com/Cyber-Zhaba/handy-scripts/refs/heads/master/after-chroot.sh > ./after-chroot.sh && chmod +x after-chroot.sh && ./after-chroot.sh
 ```
 
+```bash
+sh <(curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install) --daemon
+
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+curl -fsSL https://opencode.ai/install | bash
+```
+
